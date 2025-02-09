@@ -1,0 +1,3 @@
+"""
+QuadernoGUI package initializer.
+"""

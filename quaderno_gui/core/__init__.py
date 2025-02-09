@@ -1,0 +1,3 @@
+"""
+Core functionalities for QuadernoGUI.
+"""
