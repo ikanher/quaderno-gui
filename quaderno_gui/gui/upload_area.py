@@ -36,6 +36,9 @@ class UploadArea(QTextEdit):
                 event.acceptProposedAction()
             else:
                 event.ignore()
+    
+    def dragMoveEvent(self, event):
+        event.acceptProposedAction()
 
     def dragLeaveEvent(self, event):
         """
