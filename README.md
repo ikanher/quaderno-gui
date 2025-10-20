@@ -69,6 +69,7 @@ When launched, the GUI lets you enter the device address and (optionally) the se
 
 - Application settings (like device address and serial number) are stored using QSettings, ensuring they persist between sessions.
 - Network request timeouts are set within the DigitalPaper class so that the UI remains responsive even if the device is unreachable.
+- Configure the Zotero storage folder and database file directly on the Zotero Sync page; selections persist between sessions.
 
 ## Troubleshooting
 

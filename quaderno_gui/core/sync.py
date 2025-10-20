@@ -2,9 +2,28 @@
 Sync functionality for QuadernoGUI.
 """
 
+from pathlib import PurePosixPath
+
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from quaderno_gui.core.zotero import build_zotero_file_mapping, build_zotero_folder_set
+
+
+def _normalize_relative_path(full_path, remote_base):
+    """Return a normalized relative path (POSIX style) or None if outside the base."""
+    normalized_full = full_path.replace('\\', '/')
+    normalized_base = remote_base.replace('\\', '/')
+
+    full_posix = PurePosixPath(normalized_full)
+    base_posix = PurePosixPath(normalized_base)
+
+    try:
+        relative = full_posix.relative_to(base_posix)
+    except ValueError:
+        return None
+
+    rel_posix = relative.as_posix()
+    return '' if rel_posix == '.' else rel_posix
 
 
 class SyncWorker(QThread):
@@ -14,17 +33,31 @@ class SyncWorker(QThread):
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal(dict)
 
-    def __init__(self, dp, simulate, remote_base, parent=None):
+    def __init__(self, dp, simulate, remote_base, storage_path=None, db_path=None, parent=None):
         super().__init__(parent)
 
         self.dp = dp
         self.simulate = simulate
         self.remote_base = remote_base
+        self.storage_path = storage_path
+        self.db_path = db_path
 
     def run(self):
         self.log_signal.emit('Starting Zotero sync...' + (' (Simulation)' if self.simulate else ''))
-        zotero_files = build_zotero_file_mapping()
-        zotero_folders = build_zotero_folder_set()
+
+        try:
+            zotero_files = build_zotero_file_mapping(self.storage_path, self.db_path)
+            zotero_folders = build_zotero_folder_set(self.db_path)
+        except FileNotFoundError as exc:
+            self.log_signal.emit(str(exc))
+            self.log_signal.emit('Zotero sync aborted.')
+            self.finished_signal.emit({})
+            return
+        except Exception as exc:
+            self.log_signal.emit('Unexpected error while reading Zotero data: ' + str(exc))
+            self.log_signal.emit('Zotero sync aborted.')
+            self.finished_signal.emit({})
+            return
 
         # List what's on the device within remote_base.
         device_items = self.dp.list_all()
@@ -35,34 +68,37 @@ class SyncWorker(QThread):
             path = entry.get('entry_path', '')
             entry_type = entry.get('entry_type')
 
-            if not path.startswith(self.remote_base):
+            relative_path = _normalize_relative_path(path, self.remote_base)
+
+            if relative_path is None:
                 continue
 
-            relative_path = path[len(self.remote_base):].lstrip('/')
-
             if entry_type == 'document':
-                device_files[relative_path] = 0
+                if relative_path:
+                    device_files[relative_path] = 0
             elif entry_type == 'folder':
-                device_folders.add(relative_path)
+                if relative_path:
+                    device_folders.add(relative_path)
 
         # Ensure new Zotero folders exist on the device.
         for folder in sorted(zotero_folders):
-            device_path = folder.replace('\\', '/')
+            normalized_folder = folder.replace('\\', '/')
+            target_path = self.remote_base if not normalized_folder else self.remote_base + '/' + normalized_folder
 
-            if device_path not in device_folders:
+            if normalized_folder not in device_folders:
                 if self.simulate:
-                    self.log_signal.emit('Simulate: Would create folder: ' + self.remote_base + '/' + device_path)
+                    self.log_signal.emit('Simulate: Would create folder: ' + target_path)
                 else:
                     try:
-                        self.dp.new_folder(self.remote_base + '/' + device_path)
-                        self.log_signal.emit('Created folder: ' + self.remote_base + '/' + device_path)
+                        self.dp.new_folder(target_path)
+                        self.log_signal.emit('Created folder: ' + target_path)
                     except Exception as e:
-                        self.log_signal.emit('Folder creation failed (' + device_path + '): ' + str(e))
+                        self.log_signal.emit('Folder creation failed (' + target_path + '): ' + str(e))
 
         # Remove folders that no longer exist in Zotero.
         for folder in sorted(device_folders, reverse=True):
             if folder not in zotero_folders and folder != '':
-                remote_folder = self.remote_base + '/' + folder
+                remote_folder = self.remote_base + '/' + folder.replace('\\', '/')
 
                 if self.simulate:
                     self.log_signal.emit('Simulate: Would delete folder: ' + remote_folder)

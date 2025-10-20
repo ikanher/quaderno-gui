@@ -5,6 +5,33 @@ Zotero integration functions for QuadernoGUI.
 import os
 import sqlite3
 from datetime import datetime
+from pathlib import Path
+
+
+DEFAULT_STORAGE_DIR = Path.home() / 'Zotero' / 'storage'
+DEFAULT_DB_PATH = Path.home() / 'Zotero' / 'zotero.sqlite'
+
+
+def resolve_zotero_paths(storage_path=None, db_path=None):
+    """Resolve Zotero storage and database paths using GUI-provided overrides."""
+    storage_candidate = Path(storage_path).expanduser() if storage_path else DEFAULT_STORAGE_DIR
+    db_candidate = Path(db_path).expanduser() if db_path else DEFAULT_DB_PATH
+
+    if storage_candidate.is_dir() and storage_candidate.name != 'storage':
+        nested_storage = storage_candidate / 'storage'
+
+        if nested_storage.is_dir():
+            storage_candidate = nested_storage
+
+    db_candidate = db_candidate if db_candidate.suffix else db_candidate
+
+    if db_candidate.is_dir():
+        nested_db = db_candidate / 'zotero.sqlite'
+
+        if nested_db.is_file():
+            db_candidate = nested_db
+
+    return storage_candidate, db_candidate
 
 def get_full_collection_path(collection_id, collections):
     """
@@ -25,14 +52,32 @@ def get_full_collection_path(collection_id, collections):
 
     return coll['collectionName']
 
-def build_zotero_file_mapping():
+def build_zotero_file_mapping(storage_folder=None, db_path=None):
     """
     Build a mapping of remote file paths to local file details from Zotero.
     """
-    storage_folder = os.path.expanduser('~/Zotero/storage')
-    db_path = os.path.expanduser('~/Zotero/zotero.sqlite')
+    storage_folder, db_path = resolve_zotero_paths(storage_folder, db_path)
+
+    if not storage_folder.is_dir():
+        nested_candidate = storage_folder / 'storage'
+
+        if nested_candidate.is_dir():
+            storage_folder = nested_candidate
+
+    if not storage_folder.is_dir():
+        raise FileNotFoundError(f'Zotero storage folder not found: {storage_folder}')
+
+    if db_path.is_dir():
+        possible_db = db_path / 'zotero.sqlite'
+
+        if possible_db.is_file():
+            db_path = possible_db
+
+    if not db_path.is_file():
+        raise FileNotFoundError(f'Zotero database not found: {db_path}')
+
     mapping = {}
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
 
     # Get deleted collections.
@@ -87,38 +132,49 @@ def build_zotero_file_mapping():
             if not folder:
                 folder = 'Uncategorized'
 
-        source_dir = os.path.join(storage_folder, key)
+        source_dir = storage_folder / key
 
-        if not os.path.exists(source_dir):
+        if not source_dir.exists():
             continue
 
-        pdf_files = [f for f in os.listdir(source_dir) if f.lower().endswith('.pdf')]
+        pdf_files = [entry for entry in source_dir.iterdir() if entry.suffix.lower() == '.pdf']
         if not pdf_files:
             continue
 
         pdf_file = pdf_files[0]
-        abs_path = os.path.join(source_dir, pdf_file)
+        abs_path = pdf_file
 
         try:
             mod_time = datetime.strptime(dateModified, '%Y-%m-%d %H:%M:%S').timestamp()
         except Exception:
-            mod_time = os.path.getmtime(abs_path)
+            mod_time = pdf_file.stat().st_mtime
 
-        base, ext = os.path.splitext(pdf_file)
+        base = pdf_file.stem
+        ext = pdf_file.suffix
         unique_filename = f'{base} (itemID {itemID}){ext}'
-        remote_rel = os.path.join(folder, unique_filename).replace(os.sep, '/')
-        mapping[remote_rel] = {'abs_path': abs_path, 'mod_time': mod_time}
+        remote_rel = (Path(folder.replace(os.sep, '/')) / unique_filename).as_posix()
+        mapping[remote_rel] = {'abs_path': str(abs_path), 'mod_time': mod_time}
 
     conn.close()
 
     return mapping
 
-def build_zotero_folder_set():
+def build_zotero_folder_set(db_path=None):
     """
     Build a set of folder paths from Zotero collections.
     """
-    db_path = os.path.expanduser('~/Zotero/zotero.sqlite')
-    conn = sqlite3.connect(db_path)
+    _, db_path = resolve_zotero_paths(db_path=db_path)
+
+    if db_path.is_dir():
+        possible_db = db_path / 'zotero.sqlite'
+
+        if possible_db.is_file():
+            db_path = possible_db
+
+    if not db_path.is_file():
+        raise FileNotFoundError(f'Zotero database not found: {db_path}')
+
+    conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
     deleted_collections = set()
 
