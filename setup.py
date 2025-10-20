@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="quaderno_gui",
-    version="0.1.1",
+    version="0.1.2",
     description="A GUI application for managing DigitalPaper devices and Zotero integration.",
     author="Your Name",
     author_email="your.email@example.com",

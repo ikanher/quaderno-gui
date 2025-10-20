@@ -92,7 +92,7 @@ class FilesPage(QWidget):
                 self, "Error", "Failed to retrieve file list: " + str(e)
             )
 
-    def download_file(self):
+    def download_file(self, _item=None):
         """
         Download the selected file from the device.
         """

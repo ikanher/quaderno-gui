@@ -63,6 +63,7 @@ class SyncWorker(QThread):
         device_items = self.dp.list_all()
         device_files = {}
         device_folders = set()
+        device_base_exists = False
 
         for entry in device_items:
             path = entry.get('entry_path', '')
@@ -77,8 +78,25 @@ class SyncWorker(QThread):
                 if relative_path:
                     device_files[relative_path] = 0
             elif entry_type == 'folder':
-                if relative_path:
+                if relative_path == '':
+                    device_base_exists = True
+                    device_folders.add('')
+                else:
                     device_folders.add(relative_path)
+
+        if not device_base_exists:
+            if self.simulate:
+                self.log_signal.emit('Simulate: Would create folder: ' + self.remote_base)
+                device_folders.add('')
+                device_base_exists = True
+            else:
+                try:
+                    self.dp.new_folder(self.remote_base)
+                    self.log_signal.emit('Created folder: ' + self.remote_base)
+                    device_folders.add('')
+                    device_base_exists = True
+                except Exception as e:
+                    self.log_signal.emit('Folder creation failed (' + self.remote_base + '): ' + str(e))
 
         # Ensure new Zotero folders exist on the device.
         for folder in sorted(zotero_folders):

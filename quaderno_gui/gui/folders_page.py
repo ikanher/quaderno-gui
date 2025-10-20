@@ -120,7 +120,7 @@ class FoldersPage(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Error", "Failed to retrieve folders: " + str(e))
 
-    def folder_selected(self):
+    def folder_selected(self, _item=None):
         """
         Called when a folder is selected; refresh its file list.
         """
@@ -162,7 +162,7 @@ class FoldersPage(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Error", "Failed to retrieve files: " + str(e))
 
-    def download_file(self):
+    def download_file(self, _item=None):
         """
         Download the selected file from the current folder.
         """
