@@ -2,7 +2,7 @@
 
 ## Overview
 
-Quaderno GUI is a desktop application for managing files on your digital paper device. It integrates with Zoter. Furthermore, it allows you to connect to the device, browse and organize files and folders, and synchronize with your Zotero library. Built with Python and PyQt5, it should work on Linux, Windows, and MacOS, but has only been tested with Linux.
+Quaderno GUI is a desktop application for managing files on your digital paper device. It integrates with Zotero. Furthermore, it allows you to connect to the device, browse and organize files and folders, and synchronize with your Zotero library. Built with Python and PyQt5, it should work on Linux, Windows, and MacOS, but has only been tested with Linux.
 
 We also support **synchronization of your Zotero library to the device**. We rely on the file renaming features of Zotero 7, this has not been tested with earlier versions of Zotero.
 
